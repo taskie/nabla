@@ -108,7 +108,7 @@ fn test_multi_unordered() -> Result<(), Box<dyn std::error::Error>> {
     let actual_sort: Vec<_> = output
         .stdout
         .lines()
-        .filter_map(|l| l.ok())
+        .map_while(Result::ok)
         .sorted()
         .collect();
     assert_eq!(actual_sort, expected_sort);

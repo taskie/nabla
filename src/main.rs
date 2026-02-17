@@ -12,7 +12,7 @@ use std::{
 use anyhow::Result;
 use clap::Parser;
 use itertools::process_results;
-use log::trace;
+use log::{trace, warn};
 use parallel::{parallel_exec_multiple_files_ordered, parallel_exec_multiple_files_unordered};
 use similar::TextDiff;
 
@@ -117,7 +117,7 @@ fn run_with_files_from_buf_reader<W: Write, R: BufRead>(
 
 fn run_with_files_from_multi_args<W: Write>(args: &Args, mut bufw: W) -> Result<()> {
     let cmd_args = args.cmd_args.as_slice();
-    let last_components = cmd_args.split(|s| s == "--").last();
+    let last_components = cmd_args.split(|s| s == "--").next_back();
     if let Some(filestrs) = last_components {
         // Strip the "--" separator from cmd_opts
         let cmd_opts = &cmd_args[..cmd_args.len() - filestrs.len() - 1];
@@ -128,7 +128,7 @@ fn run_with_files_from_multi_args<W: Write>(args: &Args, mut bufw: W) -> Result<
             filestrs.iter().map(|line| line.into()),
         )?;
     } else {
-        // invalid
+        unreachable!("split().next_back() always returns Some");
     }
     Ok(())
 }
@@ -177,12 +177,19 @@ fn exec_one_file<W: Write>(args: &Args, w: W, cmd_args: &[String], file: &Path) 
     let child = command
         .args(cmd_args)
         .arg(file)
+        .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .spawn()?;
     let output = child.wait_with_output()?;
     if output.status.success() {
         let name = file.to_string_lossy();
         diff(args, w, &name, &inb, &name, &output.stdout)?;
+    } else {
+        warn!(
+            "{}: command exited with {}",
+            file.display(),
+            output.status
+        );
     }
     Ok(())
 }
@@ -191,15 +198,18 @@ fn exec_with_buf_read<R: BufRead, W: Write>(args: &Args, mut r: R, w: W) -> Resu
     let mut command = Command::new(&args.cmd_name);
     let mut inb = Vec::<u8>::new();
     r.read_to_end(&mut inb)?;
-    let child = command
+    let mut child = command
         .args(&args.cmd_args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()?;
-    child.stdin.as_ref().unwrap().write_all(&inb)?;
+    // Take and drop stdin to signal EOF after writing
+    child.stdin.take().unwrap().write_all(&inb)?;
     let output = child.wait_with_output()?;
     if output.status.success() {
         diff(args, w, "<stdin>", &inb, "<stdout>", &output.stdout)?;
+    } else {
+        warn!("command exited with {}", output.status);
     }
     Ok(())
 }
