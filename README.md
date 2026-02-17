@@ -1,11 +1,11 @@
-# dodx
+# nabla
 
-[![ci](https://github.com/taskie/dodx/actions/workflows/ci.yml/badge.svg)](https://github.com/taskie/dodx/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/taskie/dodx/branch/main/graph/badge.svg?token=QIC7IOY4PL)](https://codecov.io/gh/taskie/dodx)
+[![ci](https://github.com/taskie/nabla/actions/workflows/ci.yml/badge.svg)](https://github.com/taskie/nabla/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/taskie/nabla/branch/main/graph/badge.svg?token=QIC7IOY4PL)](https://codecov.io/gh/taskie/nabla)
 
 *a differential operator for CLI tools.*
 
-dodx creates patch files by comparing command outputs with original files.
+nabla creates patch files by comparing command outputs with original files.
 
 ![Example](images/example.gif)
 
@@ -16,13 +16,13 @@ dodx creates patch files by comparing command outputs with original files.
 ``` console
 $ cat 1.txt
 foo
-$ echo 1.txt | dodx sed 's/foo/bar/g'
+$ echo 1.txt | nabla sed 's/foo/bar/g'
 --- 1.txt
 +++ 1.txt
 @@ -1 +1 @@
 -foo
 +bar
-$ echo 1.txt | dodx sed 's/foo/bar/g' | patch -p0
+$ echo 1.txt | nabla sed 's/foo/bar/g' | patch -p0
 patching file 1.txt
 $ cat 1.txt
 bar
@@ -31,19 +31,19 @@ bar
 ### With a single argument
 
 ``` sh
-dodx -x sed 's/foo/bar/g' 1.txt
+nabla -x sed 's/foo/bar/g' 1.txt
 ```
 
 ### With multiple arguments
 
 ``` sh
-dodx -X sed 's/foo/bar/g' -- *.txt
+nabla -X sed 's/foo/bar/g' -- *.txt
 ```
 
 ### As a filter
 
 ``` sh
-echo foo | dodx -F sed 's/foo/bar/g'
+echo foo | nabla -F sed 's/foo/bar/g'
 ```
 
 Output:
@@ -59,25 +59,25 @@ Output:
 ### With `find`
 
 ``` sh
-find . -name '*.txt' | dodx sed 's/foo/bar/g'
+find . -name '*.txt' | nabla sed 's/foo/bar/g'
 # or
-find . -name '*.txt' -print0 | dodx -0 sed 's/foo/bar/g'
+find . -name '*.txt' -print0 | nabla -0 sed 's/foo/bar/g'
 # or
-find . -name '*.txt' -exec dodx -x sed 's/foo/bar/g' '{}' ';'
+find . -name '*.txt' -exec nabla -x sed 's/foo/bar/g' '{}' ';'
 # or
-find . -name '*.txt' -exec dodx -X sed 's/foo/bar/g' -- '{}' +
+find . -name '*.txt' -exec nabla -X sed 's/foo/bar/g' -- '{}' +
 ```
 
 ### With `fd`
 
 ``` sh
-fd '\.txt$' | dodx sed 's/foo/bar/g'
+fd '\.txt$' | nabla sed 's/foo/bar/g'
 # or
-fd -0 '\.txt$' | dodx -0 sed 's/foo/bar/g'
+fd -0 '\.txt$' | nabla -0 sed 's/foo/bar/g'
 # or
-fd '\.txt$' -x dodx -x sed 's/foo/bar/g'
+fd '\.txt$' -x nabla -x sed 's/foo/bar/g'
 # or
-fd '\.txt$' -X dodx -X sed 's/foo/bar/g' --
+fd '\.txt$' -X nabla -X sed 's/foo/bar/g' --
 ```
 
 ### With `rg`
@@ -87,7 +87,7 @@ rgdiff() {
     pat="$1"
     rep="$2"
     shift 2
-    rg -0l "$pat" "$@" | dodx -0u rg "$pat" -r "$rep" -IN --passthru
+    rg -0l "$pat" "$@" | nabla -0u rg "$pat" -r "$rep" -IN --passthru
 }
 
 rgdiff foo bar -g '*.txt'
@@ -96,10 +96,10 @@ rgdiff foo bar -g '*.txt'
 ## Usage
 
 ``` console
-$ dodx --help
-dodx creates patch files by comparing command outputs with original files
+$ nabla --help
+nabla creates patch files by comparing command outputs with original files
 
-Usage: dodx [OPTIONS] <CMD> [ARG]...
+Usage: nabla [OPTIONS] <CMD> [ARG]...
 
 Arguments:
   <CMD>     Command to execute

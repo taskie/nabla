@@ -1,13 +1,13 @@
 [package]
-name = "dodx"
+name = "nabla"
 version = "0.1.0"
 edition = "2021"
 license = "MIT/Apache-2.0"
-description = "dodx creates patch files by comparing command outputs with original files"
+description = "nabla creates patch files by comparing command outputs with original files"
 authors = ["taskie <t@skie.jp>"]
 keywords = ["diff"]
 readme = "README.md"
-repository = "https://github.com/taskie/dodx"
+repository = "https://github.com/taskie/nabla"
 
 [dependencies]
 anyhow = "1.0.59"

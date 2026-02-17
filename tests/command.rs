@@ -7,7 +7,7 @@ macro_rules! test_filter {
         test_filter!($args, $stdin, $stdout, "")
     };
     ($args: expr, $stdin: expr, $stdout: expr, $stderr: expr) => {
-        let mut cmd = ::assert_cmd::Command::cargo_bin("dodx")?;
+        let mut cmd = ::assert_cmd::Command::cargo_bin("nabla")?;
         let assert = cmd.args($args).write_stdin($stdin).assert();
         assert.success().stdout($stdout).stderr($stderr);
     };
@@ -94,7 +94,7 @@ fn test_multi_single_thread() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn test_multi_unordered() -> Result<(), Box<dyn std::error::Error>> {
-    let mut cmd = ::assert_cmd::Command::cargo_bin("dodx")?;
+    let mut cmd = ::assert_cmd::Command::cargo_bin("nabla")?;
     let assert = cmd
         .args(["-u", "sed", "s/e/E/g"])
         .write_stdin("tests/fixtures/example.txt\ntests/fixtures/example2.txt")
