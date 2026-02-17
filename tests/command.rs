@@ -136,6 +136,53 @@ fn test_multi_single_thread_unordered_force_parallel() -> Result<(), Box<dyn std
 }
 
 #[test]
+fn test_replace_str() -> Result<(), Box<dyn std::error::Error>> {
+    test_filter!(
+        [
+            "-I",
+            "{}",
+            "sed",
+            "s/e/E/g",
+            "{}",
+            "--",
+            "tests/fixtures/example.txt"
+        ],
+        "",
+        include_str!("fixtures/example.txt.patch")
+    );
+    Ok(())
+}
+
+#[test]
+fn test_replace_str_multi() -> Result<(), Box<dyn std::error::Error>> {
+    test_filter!(
+        [
+            "-I",
+            "{}",
+            "sed",
+            "s/e/E/g",
+            "{}",
+            "--",
+            "tests/fixtures/example.txt",
+            "tests/fixtures/example2.txt"
+        ],
+        "",
+        include_str!("fixtures/example.multi.patch")
+    );
+    Ok(())
+}
+
+#[test]
+fn test_replace_str_files_from() -> Result<(), Box<dyn std::error::Error>> {
+    test_filter!(
+        ["-I", "{}", "-f", "-", "sed", "s/e/E/g", "{}"],
+        "tests/fixtures/example.txt\ntests/fixtures/example2.txt",
+        include_str!("fixtures/example.multi.patch")
+    );
+    Ok(())
+}
+
+#[test]
 fn test_files_from() -> Result<(), Box<dyn std::error::Error>> {
     test_filter!(
         ["sed", "-f", "tests/fixtures/example_files.txt", "s/e/E/g"],

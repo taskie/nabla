@@ -39,6 +39,9 @@ struct Args {
     /// Command arguments
     #[clap(name = "ARG", trailing_var_arg = true)]
     cmd_args: Vec<String>,
+    /// Replace occurrences of REPLACE_STR in arguments with the file path
+    #[clap(short = 'I', long)]
+    replace_str: Option<String>,
     /// Force parallel execution for debugging
     #[doc(hidden)]
     #[clap(long, hide = true)]
@@ -174,12 +177,19 @@ fn exec_one_file<W: Write>(args: &Args, w: W, cmd_args: &[String], file: &Path) 
     let mut inbr = BufReader::new(inf);
     let mut inb = Vec::<u8>::new();
     inbr.read_to_end(&mut inb)?;
-    let child = command
-        .args(cmd_args)
-        .arg(file)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .spawn()?;
+    let child = if let Some(ref placeholder) = args.replace_str {
+        let file_str = file.to_string_lossy();
+        let replaced: Vec<String> = cmd_args
+            .iter()
+            .map(|a| a.replace(placeholder, &file_str))
+            .collect();
+        command.args(&replaced)
+    } else {
+        command.args(cmd_args).arg(file)
+    }
+    .stdin(Stdio::null())
+    .stdout(Stdio::piped())
+    .spawn()?;
     let output = child.wait_with_output()?;
     if output.status.success() {
         let name = file.to_string_lossy();
