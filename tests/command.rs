@@ -119,7 +119,16 @@ fn test_multi_unordered() -> Result<(), Box<dyn std::error::Error>> {
 fn test_multi_single_thread_unordered_force_parallel() -> Result<(), Box<dyn std::error::Error>> {
     // a hidden CLI option
     test_filter!(
-        ["-j", "1", "-u", "--force-parallel", "-f", "-", "sed", "s/e/E/g"],
+        [
+            "-j",
+            "1",
+            "-u",
+            "--force-parallel",
+            "-f",
+            "-",
+            "sed",
+            "s/e/E/g"
+        ],
         "tests/fixtures/example.txt\ntests/fixtures/example2.txt",
         include_str!("fixtures/example.multi.patch")
     );

@@ -185,11 +185,7 @@ fn exec_one_file<W: Write>(args: &Args, w: W, cmd_args: &[String], file: &Path) 
         let name = file.to_string_lossy();
         diff(args, w, &name, &inb, &name, &output.stdout)?;
     } else {
-        warn!(
-            "{}: command exited with {}",
-            file.display(),
-            output.status
-        );
+        warn!("{}: command exited with {}", file.display(), output.status);
     }
     Ok(())
 }

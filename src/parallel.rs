@@ -1,10 +1,10 @@
 use std::{collections::VecDeque, io::Write, num::NonZeroUsize, path::PathBuf, sync::Arc, thread};
 
 use anyhow::{Context as _, Result};
-use crossbeam_channel::{bounded, select, Sender};
+use crossbeam_channel::{Sender, bounded, select};
 use log::trace;
 
-use crate::{exec_one_file, Args};
+use crate::{Args, exec_one_file};
 #[derive(Debug)]
 enum Request {
     Input(usize, PathBuf),
@@ -186,7 +186,9 @@ pub(crate) fn parallel_exec_multiple_files_ordered<W: Write, I: Iterator<Item = 
         }
         trace!("remains: {}", c2p_rxs.len());
         loop {
-            let Some(c2p_rx) = c2p_rxs.pop_front() else { break; };
+            let Some(c2p_rx) = c2p_rxs.pop_front() else {
+                break;
+            };
             let resp = c2p_rx.recv()?;
             resp.write_to(&mut w)?;
         }
