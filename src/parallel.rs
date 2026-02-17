@@ -16,6 +16,23 @@ enum Response {
     Error(usize, PathBuf, usize, anyhow::Error),
 }
 
+impl Response {
+    fn write_to<W: Write>(self, w: &mut W) -> Result<()> {
+        match self {
+            Response::Diff(i, file, tid, buf) => {
+                trace!("handle_resp: {:?} {:?} {:?}", i, file, tid);
+                w.write_all(&buf)
+                    .with_context(|| format!("{}", file.to_string_lossy()))?;
+            }
+            Response::Error(i, file, tid, e) => {
+                trace!("handle_resp error: {:?} {:?} {:?}", i, file, tid);
+                return Err(e).with_context(|| format!("{}", file.to_string_lossy()));
+            }
+        }
+        Ok(())
+    }
+}
+
 pub(crate) fn parallel_exec_multiple_files_unordered<W: Write, I: Iterator<Item = PathBuf>>(
     args: &Args,
     mut w: W,
@@ -60,20 +77,6 @@ pub(crate) fn parallel_exec_multiple_files_unordered<W: Write, I: Iterator<Item 
                 Ok(())
             });
         }
-        // define response handler
-        let mut handle_resp = |resp: Response| -> Result<()> {
-            match resp {
-                Response::Diff(i, file, tid, buf) => {
-                    trace!("handle_resp: {:?} {:?} {:?}", i, file, tid);
-                    w.write_all(&buf)
-                        .with_context(|| format!("{}", file.to_string_lossy()))?;
-                }
-                Response::Error(_, file, _, e) => {
-                    return Err(e).with_context(|| format!("{}", file.to_string_lossy()))
-                }
-            };
-            Ok(())
-        };
         // processing files
         trace!("processing...");
         let mut count = 0usize;
@@ -90,7 +93,7 @@ pub(crate) fn parallel_exec_multiple_files_unordered<W: Write, I: Iterator<Item 
                         break;
                     }
                     recv(c2p_rx) -> resp => {
-                        handle_resp(resp?)?;
+                        resp?.write_to(&mut w)?;
                         count -= 1;
                     }
                 }
@@ -99,7 +102,7 @@ pub(crate) fn parallel_exec_multiple_files_unordered<W: Write, I: Iterator<Item 
         trace!("remains: {}", count);
         while count > 0 {
             let resp = c2p_rx.recv()?;
-            handle_resp(resp)?;
+            resp.write_to(&mut w)?;
             count -= 1;
         }
         Ok(())
@@ -146,20 +149,6 @@ pub(crate) fn parallel_exec_multiple_files_ordered<W: Write, I: Iterator<Item = 
                 Ok(())
             });
         }
-        // define response handler
-        let mut handle_resp = |resp: Response| -> Result<()> {
-            match resp {
-                Response::Diff(i, file, tid, buf) => {
-                    trace!("handle_resp: {:?} {:?} {:?}", i, file, tid);
-                    w.write_all(&buf)
-                        .with_context(|| format!("{}", file.to_string_lossy()))?;
-                }
-                Response::Error(_, file, _, e) => {
-                    return Err(e).with_context(|| format!("{}", file.to_string_lossy()))
-                }
-            };
-            Ok(())
-        };
         // processing files
         trace!("processing...");
         let mut c2p_rxs = VecDeque::new();
@@ -174,7 +163,7 @@ pub(crate) fn parallel_exec_multiple_files_ordered<W: Write, I: Iterator<Item = 
                 // pipelining
                 if c2p_rxs.len() > c2p_rxs_capacity {
                     let resp = c2p_rxs[0].recv()?;
-                    handle_resp(resp)?;
+                    resp.write_to(&mut w)?;
                     c2p_rxs.pop_front();
                 } else if !c2p_rxs.is_empty() {
                     select! {
@@ -184,7 +173,7 @@ pub(crate) fn parallel_exec_multiple_files_ordered<W: Write, I: Iterator<Item = 
                             break;
                         }
                         recv(c2p_rxs[0]) -> resp => {
-                            handle_resp(resp?)?;
+                            resp?.write_to(&mut w)?;
                             c2p_rxs.pop_front();
                         }
                     }
@@ -199,7 +188,7 @@ pub(crate) fn parallel_exec_multiple_files_ordered<W: Write, I: Iterator<Item = 
         loop {
             let Some(c2p_rx) = c2p_rxs.pop_front() else { break; };
             let resp = c2p_rx.recv()?;
-            handle_resp(resp)?;
+            resp.write_to(&mut w)?;
         }
         Ok(())
     })
