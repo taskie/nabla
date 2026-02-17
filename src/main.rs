@@ -21,34 +21,25 @@ mod parallel;
 #[derive(Clone, Debug, Parser)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
-    /// Handle null-separated input items
+    /// Read NUL-delimited input
     #[clap(short = '0', long)]
     null: bool,
-    /// The approximate number of threads to use
+    /// Approximate number of parallel jobs
     #[clap(short = 'j', long, default_value_t = 0)]
-    threads: i32,
-    /// Produce fast unordered output in multi-threaded execution
+    jobs: u32,
+    /// Allow unordered output for faster parallel execution
     #[clap(short = 'u', long)]
     unordered: bool,
-    /// Interpret arguments after last '--' as file names
-    #[clap(short = 'X', long)]
-    multi_args: bool,
-    /// Interpret the last argument as a file name
-    #[clap(short = 'x', long)]
-    single_arg: bool,
-    /// File containing file names
+    /// Read file paths from a file
     #[clap(short, long)]
     files_from: Option<PathBuf>,
-    /// Show diff between CMD's stdin and stdout
-    #[clap(short = 'F', long)]
-    filter: bool,
     /// Command to execute
     #[clap(name = "CMD")]
     cmd_name: String,
     /// Command arguments
     #[clap(name = "ARG", trailing_var_arg = true)]
     cmd_args: Vec<String>,
-    /// To debug parallelism
+    /// Force parallel execution for debugging
     #[doc(hidden)]
     #[clap(long, hide = true)]
     force_parallel: bool,
@@ -60,21 +51,16 @@ fn main() -> Result<()> {
     let stdout = io::stdout();
     let stdout_lock = stdout.lock();
     let bufw = BufWriter::new(stdout_lock);
-    let default = args.files_from.is_none() && !args.single_arg && !args.multi_args && !args.filter;
-    if default {
-        run_with_files_from_stdin(&args, bufw)?;
-    } else if let Some(files_from) = args.files_from.as_ref() {
+    if let Some(files_from) = args.files_from.as_ref() {
         if Path::new("-") == files_from {
             run_with_files_from_stdin(&args, bufw)?;
         } else {
             run_with_files_from_file(&args, bufw, files_from)?;
         }
-    } else if args.filter {
-        run_with_stdin(&args, bufw)?;
-    } else if args.single_arg {
-        run_with_files_from_single_arg(&args, bufw)?;
-    } else {
+    } else if args.cmd_args.iter().any(|s| s == "--") {
         run_with_files_from_multi_args(&args, bufw)?;
+    } else {
+        run_with_stdin(&args, bufw)?;
     }
     Ok(())
 }
@@ -129,19 +115,12 @@ fn run_with_files_from_buf_reader<W: Write, R: BufRead>(
     Ok(())
 }
 
-fn run_with_files_from_single_arg<W: Write>(args: &Args, bufw: W) -> Result<()> {
-    let cmd_args = args.cmd_args.as_slice();
-    let cmd_opts = &cmd_args[..cmd_args.len() - 1];
-    let file = Path::new(&cmd_args[cmd_args.len() - 1]);
-    exec_one_file(args, bufw, cmd_opts, file)?;
-    Ok(())
-}
-
 fn run_with_files_from_multi_args<W: Write>(args: &Args, mut bufw: W) -> Result<()> {
     let cmd_args = args.cmd_args.as_slice();
     let last_components = cmd_args.split(|s| s == "--").last();
     if let Some(filestrs) = last_components {
-        let cmd_opts = &cmd_args[..cmd_args.len() - filestrs.len()];
+        // Strip the "--" separator from cmd_opts
+        let cmd_opts = &cmd_args[..cmd_args.len() - filestrs.len() - 1];
         exec_multiple_files(
             args,
             &mut bufw,
@@ -160,8 +139,8 @@ fn exec_multiple_files<W: Write, I: Iterator<Item = PathBuf>>(
     cmd_args: &[String],
     files: I,
 ) -> Result<()> {
-    let threads = if args.threads > 0 {
-        NonZeroUsize::new(args.threads as usize).unwrap()
+    let threads = if args.jobs > 0 {
+        NonZeroUsize::new(args.jobs as usize).unwrap()
     } else {
         available_parallelism().unwrap_or(NonZeroUsize::new(1).unwrap())
     };

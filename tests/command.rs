@@ -18,7 +18,7 @@ macro_rules! test_filter {
 #[test]
 fn test() -> Result<(), Box<dyn std::error::Error>> {
     test_filter!(
-        ["sed", "s/e/E/g"],
+        ["-f", "-", "sed", "s/e/E/g"],
         "tests/fixtures/example.txt",
         include_str!("fixtures/example.txt.patch")
     );
@@ -28,7 +28,7 @@ fn test() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn test_filter() -> Result<(), Box<dyn std::error::Error>> {
     test_filter!(
-        ["sed", "-F", "s/e/E/g"],
+        ["sed", "s/e/E/g"],
         include_str!("fixtures/example.txt"),
         include_str!("fixtures/example.filter.patch")
     );
@@ -36,9 +36,9 @@ fn test_filter() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn test_single_arg() -> Result<(), Box<dyn std::error::Error>> {
+fn test_args_separator() -> Result<(), Box<dyn std::error::Error>> {
     test_filter!(
-        ["sed", "-x", "s/e/E/g", "tests/fixtures/example.txt"],
+        ["sed", "s/e/E/g", "--", "tests/fixtures/example.txt"],
         "",
         include_str!("fixtures/example.txt.patch")
     );
@@ -48,7 +48,7 @@ fn test_single_arg() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn test_multi() -> Result<(), Box<dyn std::error::Error>> {
     test_filter!(
-        ["sed", "s/e/E/g"],
+        ["-f", "-", "sed", "s/e/E/g"],
         "tests/fixtures/example.txt\ntests/fixtures/example2.txt",
         include_str!("fixtures/example.multi.patch")
     );
@@ -58,7 +58,7 @@ fn test_multi() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn test_multi_null() -> Result<(), Box<dyn std::error::Error>> {
     test_filter!(
-        ["sed", "-0", "s/e/E/g"],
+        ["-0f", "-", "sed", "s/e/E/g"],
         "tests/fixtures/example.txt\0tests/fixtures/example2.txt",
         include_str!("fixtures/example.multi.patch")
     );
@@ -70,7 +70,6 @@ fn test_multi_args() -> Result<(), Box<dyn std::error::Error>> {
     test_filter!(
         [
             "sed",
-            "-X",
             "s/e/E/g",
             "--",
             "tests/fixtures/example.txt",
@@ -85,7 +84,7 @@ fn test_multi_args() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn test_multi_single_thread() -> Result<(), Box<dyn std::error::Error>> {
     test_filter!(
-        ["-j", "1", "sed", "s/e/E/g"],
+        ["-j", "1", "-f", "-", "sed", "s/e/E/g"],
         "tests/fixtures/example.txt\ntests/fixtures/example2.txt",
         include_str!("fixtures/example.multi.patch")
     );
@@ -96,7 +95,7 @@ fn test_multi_single_thread() -> Result<(), Box<dyn std::error::Error>> {
 fn test_multi_unordered() -> Result<(), Box<dyn std::error::Error>> {
     let mut cmd = ::assert_cmd::Command::cargo_bin("nabla")?;
     let assert = cmd
-        .args(["-u", "sed", "s/e/E/g"])
+        .args(["-u", "-f", "-", "sed", "s/e/E/g"])
         .write_stdin("tests/fixtures/example.txt\ntests/fixtures/example2.txt")
         .assert()
         .success()
@@ -120,7 +119,7 @@ fn test_multi_unordered() -> Result<(), Box<dyn std::error::Error>> {
 fn test_multi_single_thread_unordered_force_parallel() -> Result<(), Box<dyn std::error::Error>> {
     // a hidden CLI option
     test_filter!(
-        ["-j", "1", "-u", "--force-parallel", "sed", "s/e/E/g"],
+        ["-j", "1", "-u", "--force-parallel", "-f", "-", "sed", "s/e/E/g"],
         "tests/fixtures/example.txt\ntests/fixtures/example2.txt",
         include_str!("fixtures/example.multi.patch")
     );
