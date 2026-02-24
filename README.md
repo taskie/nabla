@@ -19,11 +19,11 @@ cargo install --git https://github.com/taskie/nabla
 # Filter mode (default): pipe stdin through a command and diff
 echo foo | nabla sed 's/foo/bar/g'
 
-# File mode: process files specified after --
-nabla sed 's/foo/bar/g' -- *.txt
+# File mode: process files specified after :::
+nabla sed 's/foo/bar/g' ::: *.txt
 
 # Apply the diff
-nabla sed 's/foo/bar/g' -- *.txt | patch -p0
+nabla sed 's/foo/bar/g' ::: *.txt | patch -p0
 ```
 
 ## How it works
@@ -33,7 +33,7 @@ nabla selects its operating mode automatically:
 | Condition | Mode | Description |
 |---|---|---|
 | `-f FILE` given | File list | Read file paths from `FILE` (`-f -` for stdin) |
-| `--` in arguments | File | Arguments after the last `--` are file paths |
+| `:::` in arguments | File | Arguments after the last `:::` are file paths |
 | Otherwise | Filter | Read stdin, pipe through command, diff the output |
 
 In **file mode**, nabla reads each file, runs the command with the file path appended, and diffs the output against the original content.
@@ -59,15 +59,13 @@ echo foo | nabla sed 's/foo/bar/g'
 ### File mode
 
 ```console
-$ nabla sed 's/foo/bar/g' -- 1.txt
+$ nabla sed 's/foo/bar/g' ::: 1.txt
 --- 1.txt
 +++ 1.txt
 @@ -1 +1 @@
 -foo
 +bar
 ```
-
-> **Note:** If the command itself requires `--` as an argument, use `-f` to pass file paths instead.
 
 ### Reading file paths from stdin
 
@@ -81,8 +79,8 @@ When processing multiple files, nabla uses all available CPU cores by default.
 Use `-j` to limit the number of threads, or `-u` to allow unordered output for better throughput:
 
 ```sh
-nabla -j4 sed 's/foo/bar/g' -- *.txt
-nabla -u sed 's/foo/bar/g' -- *.txt
+nabla -j4 sed 's/foo/bar/g' ::: *.txt
+nabla -u sed 's/foo/bar/g' ::: *.txt
 ```
 
 ### Controlling file path position with `-I`
@@ -91,7 +89,7 @@ By default, nabla appends the file path as the last argument.
 Use `-I` to place it at an arbitrary position:
 
 ```sh
-nabla -I '{}' sh -c 'sed s/foo/bar/g < {}' -- *.txt
+nabla -I '{}' sh -c 'sed s/foo/bar/g < {}' ::: *.txt
 ```
 
 ### Recipes
@@ -101,7 +99,7 @@ With `find`:
 ```sh
 find . -name '*.txt' | nabla -f - sed 's/foo/bar/g'
 find . -name '*.txt' -print0 | nabla -0 -f - sed 's/foo/bar/g'
-find . -name '*.txt' -exec nabla sed 's/foo/bar/g' -- '{}' +
+find . -name '*.txt' -exec nabla sed 's/foo/bar/g' ::: '{}' +
 ```
 
 With `fd`:
@@ -109,7 +107,7 @@ With `fd`:
 ```sh
 fd '\.txt$' | nabla -f - sed 's/foo/bar/g'
 fd -0 '\.txt$' | nabla -0 -f - sed 's/foo/bar/g'
-fd '\.txt$' -X nabla sed 's/foo/bar/g' --
+fd '\.txt$' -X nabla sed 's/foo/bar/g' :::
 ```
 
 With `rg` (search-and-replace with diff preview):

@@ -38,7 +38,7 @@ fn test_filter() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn test_args_separator() -> Result<(), Box<dyn std::error::Error>> {
     test_filter!(
-        ["sed", "s/e/E/g", "--", "tests/fixtures/example.txt"],
+        ["sed", "s/e/E/g", ":::", "tests/fixtures/example.txt"],
         "",
         include_str!("fixtures/example.txt.patch")
     );
@@ -71,7 +71,7 @@ fn test_multi_args() -> Result<(), Box<dyn std::error::Error>> {
         [
             "sed",
             "s/e/E/g",
-            "--",
+            ":::",
             "tests/fixtures/example.txt",
             "tests/fixtures/example2.txt"
         ],
@@ -144,7 +144,7 @@ fn test_replace_str() -> Result<(), Box<dyn std::error::Error>> {
             "sed",
             "s/e/E/g",
             "{}",
-            "--",
+            ":::",
             "tests/fixtures/example.txt"
         ],
         "",
@@ -162,7 +162,7 @@ fn test_replace_str_multi() -> Result<(), Box<dyn std::error::Error>> {
             "sed",
             "s/e/E/g",
             "{}",
-            "--",
+            ":::",
             "tests/fixtures/example.txt",
             "tests/fixtures/example2.txt"
         ],

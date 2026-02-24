@@ -66,7 +66,7 @@ fn main() -> Result<()> {
         } else {
             run_with_files_from_file(&args, bufw, files_from)?;
         }
-    } else if args.cmd_args.iter().any(|s| s == "--") {
+    } else if args.cmd_args.iter().any(|s| s == ":::") {
         run_with_files_from_multi_args(&args, bufw)?;
     } else {
         run_with_stdin(&args, bufw)?;
@@ -127,9 +127,9 @@ fn run_with_files_from_buf_reader<W: Write, R: BufRead>(
 
 fn run_with_files_from_multi_args<W: Write>(args: &Args, mut bufw: W) -> Result<()> {
     let cmd_args = args.cmd_args.as_slice();
-    let last_components = cmd_args.split(|s| s == "--").next_back();
+    let last_components = cmd_args.split(|s| s == ":::").next_back();
     if let Some(filestrs) = last_components {
-        // Strip the "--" separator from cmd_opts
+        // Strip the ":::" separator from cmd_opts
         let cmd_opts = &cmd_args[..cmd_args.len() - filestrs.len() - 1];
         exec_multiple_files(
             args,
