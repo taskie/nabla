@@ -17,7 +17,7 @@ jobs:
     strategy:
       matrix:
         rust:
-          - 1.65.0  # MSRV
+          - 1.85.0  # MSRV
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@v1
@@ -31,8 +31,8 @@ jobs:
         with:
           toolchain: ${{ matrix.rust }}
       - run: cargo install --path .
-      - run: dodx --version
-      - run: dodx --help
+      - run: nabla --version
+      - run: nabla --help
       - run: cargo test --all -- --nocapture
   check-latest:
     name: Check Latest
@@ -56,6 +56,6 @@ jobs:
         with:
           shared-key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       - run: cargo install --path .
-      - run: dodx --version
-      - run: dodx --help
+      - run: nabla --version
+      - run: nabla --help
       - run: cargo test --all -- --nocapture
