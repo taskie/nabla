@@ -1,16 +1,16 @@
 [package]
-name = "nabla"
+name = "nablex"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
 license = "MIT OR Apache-2.0"
-description = "nabla creates patch files by comparing command output with original files"
+description = "nablex creates patch files by comparing command output with original files"
 authors = ["taskie <t@skie.jp>"]
 categories = ["command-line-utilities", "development-tools"]
 keywords = ["diff", "patch", "cli", "sed", "parallel"]
 readme = "README.md"
-repository = "https://github.com/taskie/nabla"
-homepage = "https://github.com/taskie/nabla"
+repository = "https://github.com/taskie/nablex"
+homepage = "https://github.com/taskie/nablex"
 
 [dependencies]
 anstream = "0.6.21"

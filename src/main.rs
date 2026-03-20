@@ -45,10 +45,10 @@ Modes:
   File list (-f)    Like File mode, read file paths from FILE
 
 File mode example:
-  nabla sed 's/foo/bar/g' ::: file.txt *.md
+  nablex sed 's/foo/bar/g' ::: file.txt *.md
 
 File list mode example:
-  find . -name '*.txt' | nabla -f - sed 's/foo/bar/g'"
+  find . -name '*.txt' | nablex -f - sed 's/foo/bar/g'"
 )]
 struct Args {
     /// Color output

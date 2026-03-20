@@ -31,8 +31,8 @@ jobs:
         with:
           toolchain: ${{ matrix.rust }}
       - run: cargo install --path .
-      - run: nabla --version
-      - run: nabla --help
+      - run: nablex --version
+      - run: nablex --help
       - run: cargo test --all -- --nocapture
   check-latest:
     name: Check Latest
@@ -56,6 +56,6 @@ jobs:
         with:
           shared-key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       - run: cargo install --path .
-      - run: nabla --version
-      - run: nabla --help
+      - run: nablex --version
+      - run: nablex --help
       - run: cargo test --all -- --nocapture
