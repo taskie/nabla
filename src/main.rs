@@ -1,4 +1,5 @@
 use std::ffi::OsString;
+use std::io::IsTerminal;
 use std::num::NonZeroUsize;
 use std::os::unix::ffi::OsStringExt;
 use std::thread;
@@ -10,16 +11,26 @@ use std::{
     process::{Command, Stdio},
 };
 
+use anstream::ColorChoice;
+use anstyle::{AnsiColor, Color, Style};
 use anyhow::{Context as _, Result};
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use itertools::process_results;
 use log::{trace, warn};
 use parallel::{
     ParallelOptions, parallel_exec_multiple_files_ordered, parallel_exec_multiple_files_unordered,
 };
-use similar::TextDiff;
+use similar::{ChangeTag, TextDiff};
 
 mod parallel;
+
+#[derive(Clone, Copy, Debug, Default, ValueEnum)]
+enum ColorWhen {
+    #[default]
+    Auto,
+    Always,
+    Never,
+}
 
 #[derive(Clone, Debug, Parser)]
 #[clap(
@@ -40,6 +51,12 @@ File list mode example:
   find . -name '*.txt' | nabla -f - sed 's/foo/bar/g'"
 )]
 struct Args {
+    /// Color output
+    #[clap(long, default_value = "auto", value_name = "WHEN")]
+    color: ColorWhen,
+    /// Resolved color flag (not a CLI argument)
+    #[clap(skip)]
+    use_color: bool,
     /// Use NUL as the path delimiter instead of newline (for use with -f or find -print0)
     #[clap(short = '0', long)]
     null: bool,
@@ -72,8 +89,19 @@ struct Args {
 
 fn main() -> Result<()> {
     env_logger::init();
-    let args = Args::parse();
-    let stdout = io::stdout();
+    let mut args = Args::parse();
+    let color_choice = match args.color {
+        ColorWhen::Always => ColorChoice::Always,
+        ColorWhen::Never => ColorChoice::Never,
+        ColorWhen::Auto => ColorChoice::Auto,
+    };
+    color_choice.write_global();
+    args.use_color = match color_choice {
+        ColorChoice::Always | ColorChoice::AlwaysAnsi => true,
+        ColorChoice::Never => false,
+        ColorChoice::Auto => io::stdout().is_terminal(),
+    };
+    let stdout = anstream::stdout();
     let stdout_lock = stdout.lock();
     let bufw = BufWriter::new(stdout_lock);
     if let Some(files_from) = args.files_from.as_ref() {
@@ -305,10 +333,63 @@ fn exec_with_buf_read<R: BufRead, W: Write>(args: &Args, mut r: R, w: W) -> Resu
     Ok(())
 }
 
-fn diff<W: Write>(_args: &Args, w: W, aname: &str, a: &[u8], bname: &str, b: &[u8]) -> Result<()> {
+fn diff<W: Write>(
+    args: &Args,
+    mut w: W,
+    aname: &str,
+    a: &[u8],
+    bname: &str,
+    b: &[u8],
+) -> Result<()> {
     let diff = TextDiff::from_lines(a, b);
-    let mut udiff = diff.unified_diff();
-    let udiff = udiff.header(aname, bname);
-    udiff.to_writer(w)?;
+    if !args.use_color {
+        let mut udiff = diff.unified_diff();
+        let udiff = udiff.header(aname, bname);
+        udiff.to_writer(w)?;
+        return Ok(());
+    }
+    let ops = diff.grouped_ops(3);
+    if ops.is_empty() {
+        return Ok(());
+    }
+    let bold = Style::new().bold();
+    let hunk = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Cyan)));
+    let del = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Red)));
+    let ins = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Green)));
+    let reset = anstyle::Reset;
+    writeln!(w, "{bold}--- {aname}{reset}")?;
+    writeln!(w, "{bold}+++ {bname}{reset}")?;
+    for group in &ops {
+        let old_range =
+            group.first().unwrap().old_range().start..group.last().unwrap().old_range().end;
+        let new_range =
+            group.first().unwrap().new_range().start..group.last().unwrap().new_range().end;
+        writeln!(
+            w,
+            "{hunk}@@ -{},{} +{},{} @@{reset}",
+            old_range.start + 1,
+            old_range.len(),
+            new_range.start + 1,
+            new_range.len(),
+        )?;
+        for op in group {
+            for change in diff.iter_changes(op) {
+                match change.tag() {
+                    ChangeTag::Delete => {
+                        write!(w, "{del}-{change}{reset}")?;
+                    }
+                    ChangeTag::Insert => {
+                        write!(w, "{ins}+{change}{reset}")?;
+                    }
+                    ChangeTag::Equal => {
+                        write!(w, " {change}")?;
+                    }
+                }
+                if change.missing_newline() {
+                    writeln!(w, "\\ No newline at end of file")?;
+                }
+            }
+        }
+    }
     Ok(())
 }

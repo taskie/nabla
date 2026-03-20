@@ -13,6 +13,8 @@ repository = "https://github.com/taskie/nabla"
 homepage = "https://github.com/taskie/nabla"
 
 [dependencies]
+anstream = "0.6.21"
+anstyle = "1.0.13"
 anyhow = "1.0.101"
 clap = { version = "4.5.59", features = ["derive"] }
 crossbeam-channel = "0.5.15"

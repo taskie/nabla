@@ -265,6 +265,8 @@ checksum = "2dffe52ecf27772e601905b7522cb4ef790d2cc203488bbd0e2fe85fcb74566d"
 name = "nabla"
 version = "0.1.0"
 dependencies = [
+ "anstream",
+ "anstyle",
  "anyhow",
  "assert_cmd",
  "clap",
