@@ -1,3 +1,5 @@
+//! Parallel file processing with backpressure via crossbeam channels.
+
 use std::{
     collections::VecDeque,
     io::Write,
@@ -10,6 +12,7 @@ use anyhow::{Context as _, Result};
 use crossbeam_channel::{Sender, bounded, select};
 use log::trace;
 
+/// Channel capacity tuning for parallel execution.
 #[derive(Debug, Clone)]
 pub(crate) struct ParallelOptions {
     pub p2c_capacity_factor: usize,
@@ -25,11 +28,13 @@ impl Default for ParallelOptions {
     }
 }
 
+/// Message sent from the dispatcher to worker threads.
 #[derive(Debug)]
 enum Request {
     Input(usize, PathBuf),
 }
 
+/// Result sent from worker threads back to the dispatcher.
 #[derive(Debug)]
 enum Response {
     Diff(usize, PathBuf, usize, Vec<u8>),
@@ -37,6 +42,7 @@ enum Response {
 }
 
 impl Response {
+    /// Write the diff output to the writer, returning whether a diff was present.
     fn write_to<W: Write>(self, w: &mut W) -> Result<bool> {
         match self {
             Response::Diff(i, file, tid, buf) => {
@@ -54,7 +60,8 @@ impl Response {
     }
 }
 
-pub(crate) fn parallel_exec_multiple_files_unordered<W, I, F>(
+/// Process files in parallel, writing results as they complete (unordered).
+pub(crate) fn parallel_diff_files_unordered<W, I, F>(
     mut w: W,
     files: I,
     threads: NonZeroUsize,
@@ -131,7 +138,8 @@ where
     })
 }
 
-pub(crate) fn parallel_exec_multiple_files_ordered<W, I, F>(
+/// Process files in parallel, writing results in input order (ordered).
+pub(crate) fn parallel_diff_files_ordered<W, I, F>(
     mut w: W,
     files: I,
     threads: NonZeroUsize,
@@ -238,7 +246,7 @@ mod tests {
     fn test_unordered_basic() {
         let files = vec![PathBuf::from("a.txt"), PathBuf::from("b.txt")];
         let mut out = Vec::new();
-        parallel_exec_multiple_files_unordered(
+        parallel_diff_files_unordered(
             &mut out,
             files.into_iter(),
             threads(2),
@@ -257,7 +265,7 @@ mod tests {
             .map(|i| PathBuf::from(format!("{:03}.txt", i)))
             .collect();
         let mut out = Vec::new();
-        parallel_exec_multiple_files_ordered(
+        parallel_diff_files_ordered(
             &mut out,
             files.into_iter(),
             threads(4),
@@ -282,7 +290,7 @@ mod tests {
     fn test_unordered_error() {
         let files = vec![PathBuf::from("fail.txt")];
         let mut out = Vec::new();
-        let result = parallel_exec_multiple_files_unordered(
+        let result = parallel_diff_files_unordered(
             &mut out,
             files.into_iter(),
             threads(1),
@@ -297,7 +305,7 @@ mod tests {
     fn test_ordered_error() {
         let files = vec![PathBuf::from("fail.txt")];
         let mut out = Vec::new();
-        let result = parallel_exec_multiple_files_ordered(
+        let result = parallel_diff_files_ordered(
             &mut out,
             files.into_iter(),
             threads(1),
@@ -337,7 +345,7 @@ mod tests {
             .map(|i| PathBuf::from(format!("{}.txt", i)))
             .collect();
         let mut out = Vec::new();
-        parallel_exec_multiple_files_unordered(
+        parallel_diff_files_unordered(
             &mut out,
             files.into_iter(),
             threads(2),
@@ -370,7 +378,7 @@ mod tests {
             .map(|i| PathBuf::from(format!("{:03}.txt", i)))
             .collect();
         let mut out = Vec::new();
-        parallel_exec_multiple_files_ordered(
+        parallel_diff_files_ordered(
             &mut out,
             files.into_iter(),
             threads(2),

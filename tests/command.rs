@@ -2,72 +2,90 @@ use std::io::BufRead;
 
 use itertools::Itertools;
 
-macro_rules! test_filter {
+fn nablex() -> assert_cmd::Command {
+    assert_cmd::Command::new(assert_cmd::cargo::cargo_bin!("nablex"))
+}
+
+macro_rules! assert_nablex {
     ($args: expr, $stdin: expr, $stdout: expr) => {
-        test_filter!($args, $stdin, $stdout, "")
+        assert_nablex!($args, $stdin, $stdout, "")
     };
     ($args: expr, $stdin: expr, $stdout: expr, $stderr: expr) => {
-        let mut cmd = ::assert_cmd::Command::new(assert_cmd::cargo::cargo_bin!("nablex"));
-        let assert = cmd.args($args).write_stdin($stdin).assert();
-        assert.success().stdout($stdout).stderr($stderr);
+        nablex()
+            .args($args)
+            .write_stdin($stdin)
+            .assert()
+            .success()
+            .stdout($stdout)
+            .stderr($stderr);
     };
 }
 
 // These test cases require `sed` command.
 
+// File list mode
+
 #[test]
-fn test() -> Result<(), Box<dyn std::error::Error>> {
-    test_filter!(
+fn test_file_list_from_stdin() {
+    assert_nablex!(
         ["-f", "-", "sed", "s/e/E/g"],
         "tests/fixtures/example.txt",
         include_str!("fixtures/example.txt.patch")
     );
-    Ok(())
 }
 
 #[test]
-fn test_filter() -> Result<(), Box<dyn std::error::Error>> {
-    test_filter!(
+fn test_files_from() {
+    assert_nablex!(
+        ["sed", "-f", "tests/fixtures/example_files.txt", "s/e/E/g"],
+        "",
+        include_str!("fixtures/example.multi.patch")
+    );
+}
+
+#[test]
+fn test_files_from_stdin() {
+    assert_nablex!(
+        ["sed", "-f", "-", "s/e/E/g"],
+        "tests/fixtures/example.txt\ntests/fixtures/example2.txt",
+        include_str!("fixtures/example.multi.patch")
+    );
+}
+
+#[test]
+fn test_files_from_stdin_null() {
+    assert_nablex!(
+        ["sed", "-0f", "-", "s/e/E/g"],
+        "tests/fixtures/example.txt\0tests/fixtures/example2.txt",
+        include_str!("fixtures/example.multi.patch")
+    );
+}
+
+// Filter mode
+
+#[test]
+fn test_filter() {
+    assert_nablex!(
         ["sed", "s/e/E/g"],
         include_str!("fixtures/example.txt"),
         include_str!("fixtures/example.filter.patch")
     );
-    Ok(())
 }
 
+// File args mode (:::)
+
 #[test]
-fn test_args_separator() -> Result<(), Box<dyn std::error::Error>> {
-    test_filter!(
+fn test_args_separator() {
+    assert_nablex!(
         ["sed", "s/e/E/g", ":::", "tests/fixtures/example.txt"],
         "",
         include_str!("fixtures/example.txt.patch")
     );
-    Ok(())
 }
 
 #[test]
-fn test_multi() -> Result<(), Box<dyn std::error::Error>> {
-    test_filter!(
-        ["-f", "-", "sed", "s/e/E/g"],
-        "tests/fixtures/example.txt\ntests/fixtures/example2.txt",
-        include_str!("fixtures/example.multi.patch")
-    );
-    Ok(())
-}
-
-#[test]
-fn test_multi_null() -> Result<(), Box<dyn std::error::Error>> {
-    test_filter!(
-        ["-0f", "-", "sed", "s/e/E/g"],
-        "tests/fixtures/example.txt\0tests/fixtures/example2.txt",
-        include_str!("fixtures/example.multi.patch")
-    );
-    Ok(())
-}
-
-#[test]
-fn test_multi_args() -> Result<(), Box<dyn std::error::Error>> {
-    test_filter!(
+fn test_multi_args() {
+    assert_nablex!(
         [
             "sed",
             "s/e/E/g",
@@ -78,23 +96,40 @@ fn test_multi_args() -> Result<(), Box<dyn std::error::Error>> {
         "",
         include_str!("fixtures/example.multi.patch")
     );
-    Ok(())
+}
+
+// Multiple files
+
+#[test]
+fn test_multi() {
+    assert_nablex!(
+        ["-f", "-", "sed", "s/e/E/g"],
+        "tests/fixtures/example.txt\ntests/fixtures/example2.txt",
+        include_str!("fixtures/example.multi.patch")
+    );
 }
 
 #[test]
-fn test_multi_single_thread() -> Result<(), Box<dyn std::error::Error>> {
-    test_filter!(
+fn test_multi_null() {
+    assert_nablex!(
+        ["-0f", "-", "sed", "s/e/E/g"],
+        "tests/fixtures/example.txt\0tests/fixtures/example2.txt",
+        include_str!("fixtures/example.multi.patch")
+    );
+}
+
+#[test]
+fn test_multi_single_thread() {
+    assert_nablex!(
         ["-j", "1", "-f", "-", "sed", "s/e/E/g"],
         "tests/fixtures/example.txt\ntests/fixtures/example2.txt",
         include_str!("fixtures/example.multi.patch")
     );
-    Ok(())
 }
 
 #[test]
-fn test_multi_unordered() -> Result<(), Box<dyn std::error::Error>> {
-    let mut cmd = ::assert_cmd::Command::new(assert_cmd::cargo::cargo_bin!("nablex"));
-    let assert = cmd
+fn test_multi_unordered() {
+    let assert = nablex()
         .args(["-u", "-f", "-", "sed", "s/e/E/g"])
         .write_stdin("tests/fixtures/example.txt\ntests/fixtures/example2.txt")
         .assert()
@@ -112,13 +147,11 @@ fn test_multi_unordered() -> Result<(), Box<dyn std::error::Error>> {
         .sorted()
         .collect();
     assert_eq!(actual_sort, expected_sort);
-    Ok(())
 }
 
 #[test]
-fn test_multi_single_thread_unordered_force_parallel() -> Result<(), Box<dyn std::error::Error>> {
-    // a hidden CLI option
-    test_filter!(
+fn test_multi_single_thread_unordered_force_parallel() {
+    assert_nablex!(
         [
             "-j",
             "1",
@@ -132,12 +165,13 @@ fn test_multi_single_thread_unordered_force_parallel() -> Result<(), Box<dyn std
         "tests/fixtures/example.txt\ntests/fixtures/example2.txt",
         include_str!("fixtures/example.multi.patch")
     );
-    Ok(())
 }
 
+// Replace string (-I)
+
 #[test]
-fn test_replace_str() -> Result<(), Box<dyn std::error::Error>> {
-    test_filter!(
+fn test_replace_str() {
+    assert_nablex!(
         [
             "-I",
             "{}",
@@ -150,12 +184,11 @@ fn test_replace_str() -> Result<(), Box<dyn std::error::Error>> {
         "",
         include_str!("fixtures/example.txt.patch")
     );
-    Ok(())
 }
 
 #[test]
-fn test_replace_str_multi() -> Result<(), Box<dyn std::error::Error>> {
-    test_filter!(
+fn test_replace_str_multi() {
+    assert_nablex!(
         [
             "-I",
             "{}",
@@ -169,64 +202,29 @@ fn test_replace_str_multi() -> Result<(), Box<dyn std::error::Error>> {
         "",
         include_str!("fixtures/example.multi.patch")
     );
-    Ok(())
 }
 
 #[test]
-fn test_replace_str_files_from() -> Result<(), Box<dyn std::error::Error>> {
-    test_filter!(
+fn test_replace_str_files_from() {
+    assert_nablex!(
         ["-I", "{}", "-f", "-", "sed", "s/e/E/g", "{}"],
         "tests/fixtures/example.txt\ntests/fixtures/example2.txt",
         include_str!("fixtures/example.multi.patch")
     );
-    Ok(())
 }
 
-#[test]
-fn test_files_from() -> Result<(), Box<dyn std::error::Error>> {
-    test_filter!(
-        ["sed", "-f", "tests/fixtures/example_files.txt", "s/e/E/g"],
-        "",
-        include_str!("fixtures/example.multi.patch")
-    );
-    Ok(())
-}
+// Color
 
 #[test]
-fn test_files_from_stdin() -> Result<(), Box<dyn std::error::Error>> {
-    test_filter!(
-        ["sed", "-f", "-", "s/e/E/g"],
-        "tests/fixtures/example.txt\ntests/fixtures/example2.txt",
-        include_str!("fixtures/example.multi.patch")
-    );
-    Ok(())
-}
-
-#[test]
-fn test_files_from_stdin_null() -> Result<(), Box<dyn std::error::Error>> {
-    test_filter!(
-        ["sed", "-0f", "-", "s/e/E/g"],
-        "tests/fixtures/example.txt\0tests/fixtures/example2.txt",
-        include_str!("fixtures/example.multi.patch")
-    );
-    Ok(())
-}
-
-#[test]
-fn test_color_always_has_ansi_codes() -> Result<(), Box<dyn std::error::Error>> {
-    test_filter!(
+fn test_color_always_has_ansi_codes() {
+    assert_nablex!(
         ["--color", "always", "cat", "tests/fixtures/example.txt"],
         include_str!("fixtures/example.nolf.txt"),
         include_str!("fixtures/example.color.patch")
     );
-    Ok(())
 }
 
-// Exit code tests
-
-fn nablex() -> assert_cmd::Command {
-    assert_cmd::Command::new(assert_cmd::cargo::cargo_bin!("nablex"))
-}
+// Exit codes
 
 #[test]
 fn test_exit_0_no_check() {
@@ -262,7 +260,6 @@ fn test_exit_1_check_with_diff() {
 
 #[test]
 fn test_exit_1_check_file_mode() {
-    // --check in file mode
     nablex()
         .args([
             "--check",
@@ -278,7 +275,6 @@ fn test_exit_1_check_file_mode() {
 
 #[test]
 fn test_exit_2_command_not_found() {
-    // Nonexistent command → exit 2
     nablex()
         .args(["nonexistent_cmd_12345"])
         .write_stdin("hello\n")
@@ -289,7 +285,6 @@ fn test_exit_2_command_not_found() {
 
 #[test]
 fn test_exit_2_file_not_found() {
-    // Nonexistent file → exit 2
     nablex()
         .args(["cat", ":::", "nonexistent_file_12345.txt"])
         .assert()
@@ -297,9 +292,10 @@ fn test_exit_2_file_not_found() {
         .stdout("");
 }
 
+// Skip unreadable
+
 #[test]
 fn test_exit_0_skip_unreadable() {
-    // --skip-unreadable skips missing files instead of erroring
     nablex()
         .args(["-s", "cat", ":::", "nonexistent_file_12345.txt"])
         .assert()
@@ -309,7 +305,6 @@ fn test_exit_0_skip_unreadable() {
 
 #[test]
 fn test_exit_0_skip_unreadable_with_valid_file() {
-    // --skip-unreadable processes valid files and skips missing ones
     nablex()
         .args([
             "-s",
@@ -342,33 +337,29 @@ fn test_exit_1_check_skip_unreadable_with_diff() {
         .stdout(include_str!("fixtures/example.txt.patch"));
 }
 
-// Label tests
+// Labels (-L)
 
 #[test]
-fn test_label_both() -> Result<(), Box<dyn std::error::Error>> {
-    // -L given twice: override both old and new labels
-    test_filter!(
+fn test_label_both() {
+    assert_nablex!(
         ["-L", "original", "-L", "modified", "sed", "s/e/E/g"],
         include_str!("fixtures/example.txt"),
         include_str!("fixtures/example.label.patch")
     );
-    Ok(())
 }
 
 #[test]
-fn test_label_old_only() -> Result<(), Box<dyn std::error::Error>> {
-    // -L given once: override old label, new defaults to <stdout>
-    test_filter!(
+fn test_label_old_only() {
+    assert_nablex!(
         ["-L", "original", "sed", "s/e/E/g"],
         include_str!("fixtures/example.txt"),
         include_str!("fixtures/example.label_old_only.patch")
     );
-    Ok(())
 }
 
 #[test]
-fn test_label_file_mode() -> Result<(), Box<dyn std::error::Error>> {
-    test_filter!(
+fn test_label_file_mode() {
+    assert_nablex!(
         [
             "-L",
             "original",
@@ -382,7 +373,6 @@ fn test_label_file_mode() -> Result<(), Box<dyn std::error::Error>> {
         "",
         include_str!("fixtures/example.label.patch")
     );
-    Ok(())
 }
 
 #[test]

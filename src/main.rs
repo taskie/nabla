@@ -1,3 +1,5 @@
+//! CLI entry point: parse arguments, select operating mode, and produce unified diffs.
+
 use std::ffi::OsString;
 use std::io::IsTerminal;
 use std::num::NonZeroUsize;
@@ -17,13 +19,12 @@ use anyhow::{Context as _, Result};
 use clap::{Parser, ValueEnum};
 use itertools::process_results;
 use log::{trace, warn};
-use parallel::{
-    ParallelOptions, parallel_exec_multiple_files_ordered, parallel_exec_multiple_files_unordered,
-};
+use parallel::{ParallelOptions, parallel_diff_files_ordered, parallel_diff_files_unordered};
 use similar::{ChangeTag, TextDiff};
 
 mod parallel;
 
+/// When to colorize output.
 #[derive(Clone, Copy, Debug, Default, ValueEnum)]
 enum ColorWhen {
     #[default]
@@ -32,6 +33,7 @@ enum ColorWhen {
     Never,
 }
 
+/// Command-line arguments.
 #[derive(Clone, Debug, Parser)]
 #[clap(
     author,
@@ -108,6 +110,7 @@ fn main() {
     }
 }
 
+/// Parse arguments, set up output, and dispatch to the appropriate mode.
 fn run() -> Result<bool> {
     let mut args = Args::parse();
     if args.labels.len() > 2 {
@@ -129,47 +132,46 @@ fn run() -> Result<bool> {
     let bufw = BufWriter::new(stdout_lock);
     let has_diff = if let Some(files_from) = args.files_from.as_ref() {
         if Path::new("-") == files_from {
-            run_with_files_from_stdin(&args, bufw)?
+            run_file_list_stdin(&args, bufw)?
         } else {
-            run_with_files_from_file(&args, bufw, files_from)?
+            run_file_list_file(&args, bufw, files_from)?
         }
     } else if args.cmd_args.iter().any(|s| s == ":::") {
-        run_with_files_from_multi_args(&args, bufw)?
+        run_file_args(&args, bufw)?
     } else {
-        run_with_stdin(&args, bufw)?
+        run_filter(&args, bufw)?
     };
     Ok(args.check && has_diff)
 }
 
-fn run_with_stdin<W: Write>(args: &Args, bufw: W) -> Result<bool> {
+/// Filter mode entry point: read stdin and pipe through the command.
+fn run_filter<W: Write>(args: &Args, bufw: W) -> Result<bool> {
     let stdin = io::stdin();
     let stdin_lock = stdin.lock();
     let bufr = BufReader::new(stdin_lock);
-    exec_with_buf_read(args, bufr, bufw)
+    diff_filter(args, bufr, bufw)
 }
 
-fn run_with_files_from_stdin<W: Write>(args: &Args, bufw: W) -> Result<bool> {
+/// File list mode entry point: read file paths from stdin (`-f -`).
+fn run_file_list_stdin<W: Write>(args: &Args, bufw: W) -> Result<bool> {
     let stdin = io::stdin();
     let stdin_lock = stdin.lock();
     let bufr = BufReader::new(stdin_lock);
-    run_with_files_from_buf_reader(args, bufw, bufr)
+    run_file_list(args, bufw, bufr)
 }
 
-fn run_with_files_from_file<W: Write>(args: &Args, bufw: W, path: &Path) -> Result<bool> {
+/// File list mode entry point: read file paths from a file (`-f FILE`).
+fn run_file_list_file<W: Write>(args: &Args, bufw: W, path: &Path) -> Result<bool> {
     let file = File::open(path).with_context(|| format!("failed to open: {}", path.display()))?;
     let bufr = BufReader::new(file);
-    run_with_files_from_buf_reader(args, bufw, bufr)
-        .with_context(|| format!("failed to read: {}", path.display()))
+    run_file_list(args, bufw, bufr).with_context(|| format!("failed to read: {}", path.display()))
 }
 
-fn run_with_files_from_buf_reader<W: Write, R: BufRead>(
-    args: &Args,
-    mut bufw: W,
-    bufr: R,
-) -> Result<bool> {
+/// Parse file paths from a reader and process them.
+fn run_file_list<W: Write, R: BufRead>(args: &Args, mut bufw: W, bufr: R) -> Result<bool> {
     if args.null {
         Ok(process_results(bufr.split(0), |lines| {
-            exec_multiple_files(
+            diff_files(
                 args,
                 &mut bufw,
                 &args.cmd_args,
@@ -178,7 +180,7 @@ fn run_with_files_from_buf_reader<W: Write, R: BufRead>(
         })??)
     } else {
         Ok(process_results(bufr.lines(), |lines| {
-            exec_multiple_files(
+            diff_files(
                 args,
                 &mut bufw,
                 &args.cmd_args,
@@ -188,13 +190,14 @@ fn run_with_files_from_buf_reader<W: Write, R: BufRead>(
     }
 }
 
-fn run_with_files_from_multi_args<W: Write>(args: &Args, mut bufw: W) -> Result<bool> {
+/// File args mode entry point: extract file paths after `:::` separator.
+fn run_file_args<W: Write>(args: &Args, mut bufw: W) -> Result<bool> {
     let cmd_args = args.cmd_args.as_slice();
     let last_components = cmd_args.split(|s| s == ":::").next_back();
     if let Some(filestrs) = last_components {
         // Strip the ":::" separator from cmd_opts
         let cmd_opts = &cmd_args[..cmd_args.len() - filestrs.len() - 1];
-        exec_multiple_files(
+        diff_files(
             args,
             &mut bufw,
             cmd_opts,
@@ -205,7 +208,8 @@ fn run_with_files_from_multi_args<W: Write>(args: &Args, mut bufw: W) -> Result<
     }
 }
 
-fn exec_multiple_files<W: Write, I: Iterator<Item = PathBuf>>(
+/// Dispatch multiple files to serial or parallel execution.
+fn diff_files<W: Write, I: Iterator<Item = PathBuf>>(
     args: &Args,
     w: W,
     cmd_args: &[String],
@@ -217,34 +221,23 @@ fn exec_multiple_files<W: Write, I: Iterator<Item = PathBuf>>(
         available_parallelism().unwrap_or(NonZeroUsize::new(1).unwrap())
     };
     if threads <= NonZeroUsize::new(1).unwrap() && !args.force_parallel {
-        serial_exec_multiple_files(args, w, cmd_args, files)
+        diff_files_serial(args, w, cmd_args, files)
     } else {
         let exec_fn = |file: &Path| -> Result<Vec<u8>> {
             let mut buf = Vec::new();
-            exec_one_file(args, &mut buf, cmd_args, file)?;
+            diff_file(args, &mut buf, cmd_args, file)?;
             Ok(buf)
         };
         if args.unordered {
-            parallel_exec_multiple_files_unordered(
-                w,
-                files,
-                threads,
-                exec_fn,
-                ParallelOptions::default(),
-            )
+            parallel_diff_files_unordered(w, files, threads, exec_fn, ParallelOptions::default())
         } else {
-            parallel_exec_multiple_files_ordered(
-                w,
-                files,
-                threads,
-                exec_fn,
-                ParallelOptions::default(),
-            )
+            parallel_diff_files_ordered(w, files, threads, exec_fn, ParallelOptions::default())
         }
     }
 }
 
-fn serial_exec_multiple_files<W: Write, I: Iterator<Item = PathBuf>>(
+/// Process files sequentially on the current thread.
+fn diff_files_serial<W: Write, I: Iterator<Item = PathBuf>>(
     args: &Args,
     mut w: W,
     cmd_args: &[String],
@@ -253,14 +246,15 @@ fn serial_exec_multiple_files<W: Write, I: Iterator<Item = PathBuf>>(
     let mut count = 0usize;
     let mut has_diff = false;
     for file in files {
-        has_diff |= exec_one_file(args, &mut w, cmd_args, &file)?;
+        has_diff |= diff_file(args, &mut w, cmd_args, &file)?;
         count += 1;
     }
     trace!("processed: {}", count);
     Ok(has_diff)
 }
 
-fn exec_one_file<W: Write>(args: &Args, w: W, cmd_args: &[String], file: &Path) -> Result<bool> {
+/// Read one file, run the command, and write the unified diff.
+fn diff_file<W: Write>(args: &Args, w: W, cmd_args: &[String], file: &Path) -> Result<bool> {
     let mut command = Command::new(&args.cmd_name);
     let inf = match File::open(file) {
         Ok(f) => f,
@@ -310,7 +304,8 @@ fn exec_one_file<W: Write>(args: &Args, w: W, cmd_args: &[String], file: &Path) 
     Ok(false)
 }
 
-fn exec_with_buf_read<R: BufRead, W: Write>(args: &Args, mut r: R, w: W) -> Result<bool> {
+/// Pipe input through the command and write the unified diff of stdin vs stdout.
+fn diff_filter<R: BufRead, W: Write>(args: &Args, mut r: R, w: W) -> Result<bool> {
     let mut command = Command::new(&args.cmd_name);
     let mut child = command
         .args(&args.cmd_args)
@@ -356,6 +351,7 @@ fn exec_with_buf_read<R: BufRead, W: Write>(args: &Args, mut r: R, w: W) -> Resu
     Ok(false)
 }
 
+/// Compute and write a unified diff, with optional color output.
 fn diff<W: Write>(
     args: &Args,
     mut w: W,
