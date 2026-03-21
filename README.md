@@ -7,6 +7,15 @@
 
 ![Example](images/example.gif)
 
+## Features
+
+* Generalizes `diff -u file <(cmd file)` to multiple files and stdin
+* Parallel execution with ordered output
+* `diff`-compatible exit codes (`--check`)
+* Binary-safe I/O
+* Colored diff output
+* Multiple diff algorithms via [similar](https://github.com/mitsuhiko/similar) (Myers, Patience, LCS)
+
 ## Installation
 
 ```sh
@@ -83,6 +92,20 @@ nablex -j4 sed 's/foo/bar/g' ::: *.txt
 nablex -u sed 's/foo/bar/g' ::: *.txt
 ```
 
+### Check mode
+
+By default, nablex always exits with 0 regardless of whether differences are found.
+Use `--check` to adopt `diff`-compatible exit codes.
+
+```sh
+nablex --check sed 's/foo/bar/g' ::: *.txt
+case $? in
+  0) echo "no differences" ;;
+  1) echo "differences found" ;;
+  2) echo "error" ;;
+esac
+```
+
 ### Controlling file path position with `-I`
 
 By default, nablex appends the file path as the last argument.
@@ -90,6 +113,23 @@ Use `-I` to place it at an arbitrary position:
 
 ```sh
 nablex -I '{}' sh -c 'sed s/foo/bar/g < {}' ::: *.txt
+```
+
+### Custom diff labels with `-L`
+
+By default, filter mode uses `<stdin>` / `<stdout>` as header labels, and file mode uses the file path.
+Use `-L` (up to twice) to override — like GNU diff's `--label`:
+
+```sh
+echo foo | nablex -L old -L new sed 's/foo/bar/g'
+```
+
+```diff
+--- old
++++ new
+@@ -1 +1 @@
+-foo
++bar
 ```
 
 ### Recipes
@@ -129,12 +169,17 @@ Arguments:
   [ARG]...  Arguments for CMD; use ':::' to separate CMD args from file paths
 
 Options:
+      --color <WHEN>               Color output [default: auto] [possible values: auto, always, never]
   -0, --null                       Use NUL as the path delimiter instead of newline (for use with -f or find -print0)
   -j, --jobs <JOBS>                Number of parallel jobs (0 = auto-detect) [default: 0]
   -u, --unordered                  Allow unordered output for faster parallel execution
   -f, --files-from <FILE>          Read file paths from FILE ('-' for stdin)
   -I, --replace-str <REPLACE_STR>  Replace occurrences of REPLACE_STR in arguments with the file path
   -s, --skip-unreadable            Skip unreadable files with a warning instead of aborting
+  -c, --check                      Exit with status 1 if any differences are found
+  -U, --context <NUM>              Number of lines of context in unified diff output [default: 3]
+      --algorithm <ALGO>           Diff algorithm [default: myers] [possible values: myers, patience, lcs]
+  -L, --label <LABELS>             Override diff header labels (can be given up to 2 times: old and new)
   -h, --help                       Print help (see more with '--help')
   -V, --version                    Print version
 ```
