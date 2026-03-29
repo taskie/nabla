@@ -1,9 +1,7 @@
 //! CLI entry point: parse arguments, select operating mode, and produce unified diffs.
 
-use std::ffi::OsString;
 use std::io::IsTerminal;
 use std::num::NonZeroUsize;
-use std::os::unix::ffi::OsStringExt;
 use std::thread;
 use std::thread::available_parallelism;
 use std::{
@@ -192,16 +190,25 @@ fn run_file_list_file<W: Write>(args: &Args, bufw: W, path: &Path) -> Result<boo
     run_file_list(args, bufw, bufr).with_context(|| format!("failed to read: {}", path.display()))
 }
 
+/// Convert NUL-delimited bytes to a PathBuf.
+fn bytes_to_path(bytes: Vec<u8>) -> PathBuf {
+    #[cfg(unix)]
+    {
+        use std::ffi::OsString;
+        use std::os::unix::ffi::OsStringExt;
+        OsString::from_vec(bytes).into()
+    }
+    #[cfg(not(unix))]
+    {
+        String::from_utf8_lossy(&bytes).into_owned().into()
+    }
+}
+
 /// Parse file paths from a reader and process them.
 fn run_file_list<W: Write, R: BufRead>(args: &Args, mut bufw: W, bufr: R) -> Result<bool> {
     if args.null {
         Ok(process_results(bufr.split(0), |lines| {
-            diff_files(
-                args,
-                &mut bufw,
-                &args.cmd_args,
-                lines.map(|line| OsString::from_vec(line).into()),
-            )
+            diff_files(args, &mut bufw, &args.cmd_args, lines.map(bytes_to_path))
         })??)
     } else {
         Ok(process_results(bufr.lines(), |lines| {
