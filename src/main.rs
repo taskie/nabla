@@ -373,7 +373,12 @@ fn diff_filter<R: BufRead, W: Write>(args: &Args, mut r: R, w: W) -> Result<bool
     });
     let child_out = child_out?;
     let status = child.wait()?;
-    stream_result?;
+    if let Err(e) = stream_result {
+        // Ignore BrokenPipe: the child may close stdin before we finish writing
+        if e.kind() != io::ErrorKind::BrokenPipe {
+            return Err(e.into());
+        }
+    }
     if status.success() {
         let aname = args.labels.first().map(|s| s.as_str()).unwrap_or("<stdin>");
         let bname = args.labels.get(1).map(|s| s.as_str()).unwrap_or("<stdout>");
